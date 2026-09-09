@@ -1,7 +1,7 @@
 package com.marwix127.court_booking.court;
 
 public enum CourtType {
-    TENIS,
+    TENNIS,
     PADEL,
-    FUTBOL_SALA
+    FUTSAL
 }

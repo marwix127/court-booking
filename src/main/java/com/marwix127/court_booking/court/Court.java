@@ -3,7 +3,6 @@ package com.marwix127.court_booking.court;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UuidGenerator;
 
-import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import lombok.Getter;
@@ -25,15 +24,13 @@ public class Court {
 
     private String name;
 
-    @Column (name = "court_type")
-    private @Enumerated(EnumType.STRING) CourtType courtType;
+    @Enumerated(EnumType.STRING)
+    private CourtType courtType;
 
-    @Column (name = "slot_minutes")
     private Short slotMinutes;
 
     private boolean active;
 
-    @Column (name = "created_at")
     @CreationTimestamp 
     private java.time.Instant createdAt;
 
