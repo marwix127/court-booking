@@ -27,7 +27,7 @@ CREATE TABLE courts (
     active       boolean     NOT NULL DEFAULT true,
     created_at   timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT uq_courts_name UNIQUE (name),
-    CONSTRAINT ck_courts_type CHECK (court_type IN ('PADEL','TENIS','FUTBOL_SALA')),
+    CONSTRAINT ck_courts_type CHECK (court_type IN ('PADEL','TENNIS','FUTSAL')),
     CONSTRAINT ck_courts_slot CHECK (slot_minutes BETWEEN 15 AND 240 AND slot_minutes % 15 = 0)
 );
 
