@@ -30,7 +30,7 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
                         // Consultar pistas es publico.
-                        .requestMatchers(HttpMethod.GET, "/api/courts", "/api/courts/**")
+                        .requestMatchers(HttpMethod.GET, "/api/courts", "/api/courts/**","/api/users/**")
                         .permitAll()
                         // Cualquier otra ruta exige autenticacion. Regla por
                         // defecto restrictiva: al anadir endpoints quedan
