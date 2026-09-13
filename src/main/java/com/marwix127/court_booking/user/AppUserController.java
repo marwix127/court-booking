@@ -1,0 +1,24 @@
+package com.marwix127.court_booking.user;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+@RestController
+@RequestMapping("/api/users")
+@RequiredArgsConstructor
+public class AppUserController {
+
+    private final AppUserService appUserService;
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public UserResponse register(@RequestBody RegisterRequest request) {
+        return UserResponse.from(appUserService.register(request));
+    }
+}
