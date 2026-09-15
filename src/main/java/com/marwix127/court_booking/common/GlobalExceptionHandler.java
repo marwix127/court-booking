@@ -1,7 +1,12 @@
 package com.marwix127.court_booking.common;
 
+import java.util.Map;
+import java.util.TreeMap;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -23,5 +28,26 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     public ProblemDetail handleConflict(ConflictException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    /**
+     * Fallos de Bean Validation (@Valid) sobre el cuerpo de la peticion.
+     * Ademas del 400, devuelve un mapa campo -> motivo en la propiedad
+     * "errors", para que el cliente sepa exactamente que corregir.
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ProblemDetail handleValidation(MethodArgumentNotValidException ex) {
+        Map<String, String> errors = new TreeMap<>();
+        for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
+            String message = fieldError.getDefaultMessage() != null
+                    ? fieldError.getDefaultMessage()
+                    : "invalid value";
+            // Si un campo incumple varias restricciones, se concatenan.
+            errors.merge(fieldError.getField(), message, (a, b) -> a + "; " + b);
+        }
+
+        var problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Validation failed");
+        problem.setProperty("errors", errors);
+        return problem;
     }
 }

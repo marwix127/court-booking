@@ -11,6 +11,8 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 
+import jakarta.servlet.DispatcherType;
+
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -29,10 +31,19 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
                 .authorizeHttpRequests(auth -> auth
-                        // Consultar pistas es publico.
+                        // Cuando una excepcion no manejada llega al contenedor,
+                        // Spring Boot reenvia internamente a /error. Ese reenvio
+                        // no debe exigir autenticacion: si no, cualquier error
+                        // le llega a un cliente anonimo como 401 en vez de su
+                        // codigo real (400, 500...). No abre ninguna ruta.
+                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+
+                        // Registrarse es publico por definicion.
                         .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/courts", "/api/courts/**")
-                        .permitAll()
+
+                        // Consultar pistas es publico.
+                        .requestMatchers(HttpMethod.GET, "/api/courts", "/api/courts/**").permitAll()
+
                         // Cualquier otra ruta exige autenticacion. Regla por
                         // defecto restrictiva: al anadir endpoints quedan
                         // protegidos salvo que se abran a proposito.
