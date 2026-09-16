@@ -1,9 +1,11 @@
 package com.marwix127.court_booking.bookings;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -19,6 +21,7 @@ import com.marwix127.court_booking.court.CourtRepository;
 import com.marwix127.court_booking.opening_hours.OpeningHours;
 import com.marwix127.court_booking.opening_hours.OpeningHoursRepository;
 import com.marwix127.court_booking.user.AppUser;
+import com.marwix127.court_booking.user.AppUserRole;
 
 import lombok.RequiredArgsConstructor;
 
@@ -70,6 +73,49 @@ public class BookingService {
             }
             throw ex;
         }
+    }
+
+    /**
+     * Cancela una reserva. No borra la fila: pasa el estado a CANCELLED, con
+     * lo que queda fuera del indice parcial de booking_no_overlap y la franja
+     * vuelve a estar libre, pero el historico se conserva.
+     *
+     * Puede cancelar el dueño de la reserva o un administrador, y solo antes
+     * de la hora de comienzo.
+     *
+     * Es idempotente: cancelar algo ya cancelado no cambia nada y no es un
+     * error, el estado final pedido por el cliente es el que hay.
+     */
+    @Transactional
+    public Booking cancel(UUID bookingId, AppUser actor) {
+        // Con court y user cargados: la respuesta se construye fuera de esta
+        // transaccion y ambos son LAZY.
+        var booking = bookingRepository.findWithCourtAndUserById(bookingId)
+                .orElseThrow(() -> new BookingNotFoundException(bookingId));
+
+        boolean owner = booking.getUser().getId().equals(actor.getId());
+        boolean admin = actor.getRole() == AppUserRole.ADMIN;
+        if (!owner && !admin) {
+            throw new NotBookingOwnerException();
+        }
+
+        if (booking.getStatus() == BookingStatus.CANCELLED) {
+            return booking;
+        }
+
+        // El limite es la hora de comienzo, no la de fin: una reserva en curso
+        // ya no se cancela.
+        if (!booking.getStartsAt().isAfter(Instant.now())) {
+            throw new BookingNotCancellableException();
+        }
+
+        booking.setStatus(BookingStatus.CANCELLED);
+
+        // saveAndFlush para que el UPDATE, y con el la comprobacion de @Version,
+        // ocurra aqui y no al cerrar la transaccion. Si otra peticion cancelo
+        // esta misma reserva entre la lectura y este punto, salta
+        // OptimisticLockingFailureException y el handler la traduce a 409.
+        return bookingRepository.saveAndFlush(booking);
     }
 
     /**

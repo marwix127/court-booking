@@ -3,6 +3,7 @@ package com.marwix127.court_booking.common;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.validation.FieldError;
@@ -28,6 +29,25 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     public ProblemDetail handleConflict(ConflictException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(ForbiddenException.class)
+    public ProblemDetail handleForbidden(ForbiddenException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    /**
+     * Bloqueo optimista: otra peticion modifico la misma fila entre nuestra
+     * lectura y nuestra escritura, y la columna @Version ya no coincide.
+     *
+     * Es un 409 por el mismo motivo que el solape: la peticion era valida, el
+     * estado cambio debajo. Quien la reciba solo tiene que volver a leer y
+     * reintentar.
+     */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ProblemDetail handleOptimisticLock(OptimisticLockingFailureException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
+                "The resource was modified by another request; retry");
     }
 
     /**

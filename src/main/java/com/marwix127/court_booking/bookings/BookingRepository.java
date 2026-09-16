@@ -2,8 +2,10 @@ package com.marwix127.court_booking.bookings;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface BookingRepository extends JpaRepository<Booking, UUID> {
@@ -17,4 +19,15 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
      */
     List<Booking> findByCourtIdAndStatusAndStartsAtLessThanAndEndsAtGreaterThan(
             UUID courtId, BookingStatus status, Instant windowEnd, Instant windowStart);
+
+    /**
+     * Igual que findById pero trayendo court y user en la misma consulta.
+     *
+     * Las dos asociaciones son LAZY, que es lo correcto por defecto. Pero la
+     * respuesta necesita el nombre de la pista, y si se accede a el despues de
+     * cerrar la transaccion salta LazyInitializationException. El EntityGraph
+     * las carga por adelantado, con un JOIN, solo donde hace falta.
+     */
+    @EntityGraph(attributePaths = { "court", "user" })
+    Optional<Booking> findWithCourtAndUserById(UUID id);
 }
