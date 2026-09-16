@@ -1,6 +1,7 @@
 package com.marwix127.court_booking.closures;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,5 +16,9 @@ public interface ClosureRepository extends JpaRepository<Closure, UUID> {
      * justo cuando empieza la reserva no cuenta como solape.
      */
     boolean existsByCourtIdAndStartsAtLessThanAndEndsAtGreaterThan(
-            UUID courtId, Instant endsAt, Instant startsAt);
+            UUID courtId, Instant windowEnd, Instant windowStart);
+
+    /** Los cierres que solapan con la ventana, para descartar tramos. */
+    List<Closure> findByCourtIdAndStartsAtLessThanAndEndsAtGreaterThan(
+            UUID courtId, Instant windowEnd, Instant windowStart);
 }
