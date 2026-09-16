@@ -2,11 +2,8 @@ package com.marwix127.court_booking.bookings;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.time.DayOfWeek;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -16,25 +13,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 
-import com.marwix127.court_booking.TestcontainersConfiguration;
-import com.marwix127.court_booking.closures.ClosureRepository;
+import com.marwix127.court_booking.AbstractIntegrationTest;
 import com.marwix127.court_booking.court.Court;
-import com.marwix127.court_booking.court.CourtRepository;
-import com.marwix127.court_booking.court.CourtType;
-import com.marwix127.court_booking.opening_hours.OpeningHours;
-import com.marwix127.court_booking.opening_hours.OpeningHoursRepository;
 import com.marwix127.court_booking.user.AppUser;
-import com.marwix127.court_booking.user.AppUserRepository;
-import com.marwix127.court_booking.user.AppUserRole;
 
 /**
  * Comprueba que dos usuarios no pueden reservar la misma pista a la misma hora,
@@ -47,28 +33,13 @@ import com.marwix127.court_booking.user.AppUserRole;
  * Ningun metodo lleva @Transactional: cada hilo necesita su propia transaccion
  * real, y una transaccion de test envolviendolo todo falsearia el escenario.
  */
-@Import(TestcontainersConfiguration.class)
-@SpringBootTest
 @DisplayName("Reservas solapadas")
-class BookingOverlapTest {
+class BookingOverlapTest extends AbstractIntegrationTest {
 
     private static final int CONCURRENT_ATTEMPTS = 8;
 
     @Autowired
     private BookingService bookingService;
-    @Autowired
-    private BookingRepository bookingRepository;
-    @Autowired
-    private CourtRepository courtRepository;
-    @Autowired
-    private OpeningHoursRepository openingHoursRepository;
-    @Autowired
-    private ClosureRepository closureRepository;
-    @Autowired
-    private AppUserRepository appUserRepository;
-
-    @Value("${app.club.timezone}")
-    private String clubTimezone;
 
     private Court court;
     private List<AppUser> users;
@@ -76,43 +47,18 @@ class BookingOverlapTest {
     private Instant slotEnd;
 
     @BeforeEach
-    void setUp() {
-        cleanUp();
-
-        court = new Court();
-        court.setName("Padel 1");
-        court.setCourtType(CourtType.PADEL);
-        court.setSlotMinutes((short) 60);
-        court.setActive(true);
-        court = courtRepository.save(court);
-
-        // Abierta de 09:00 a 22:00 todos los dias, para que la franja elegida
-        // sea valida cualquier dia que caiga.
-        for (DayOfWeek day : DayOfWeek.values()) {
-            var hours = new OpeningHours();
-            hours.setCourt(court);
-            hours.setDayOfWeek(day);
-            hours.setOpensAt(LocalTime.of(9, 0));
-            hours.setClosesAt(LocalTime.of(22, 0));
-            openingHoursRepository.save(hours);
-        }
+    void setUpClub() {
+        court = givenCourt((short) 60);
+        givenOpeningHours(court, LocalTime.of(9, 0), LocalTime.of(22, 0));
 
         users = new ArrayList<>();
         for (int i = 0; i < CONCURRENT_ATTEMPTS; i++) {
-            users.add(createUser("user" + i + "@test.com"));
+            users.add(givenUser("user" + i + "@test.com"));
         }
 
-        // Fecha futura relativa a hoy, para que el test no caduque con el
-        // tiempo. La conversion usa la zona del club, igual que el servicio.
-        var zone = ZoneId.of(clubTimezone);
-        LocalDate date = LocalDate.now(zone).plusDays(30);
-        slotStart = date.atTime(10, 0).atZone(zone).toInstant();
-        slotEnd = date.atTime(11, 0).atZone(zone).toInstant();
-    }
-
-    @AfterEach
-    void tearDown() {
-        cleanUp();
+        var date = futureDate();
+        slotStart = at(date, 10, 0);
+        slotEnd = at(date, 11, 0);
     }
 
     @Test
@@ -214,24 +160,6 @@ class BookingOverlapTest {
                 .findByCourtIdAndStatusAndStartsAtLessThanAndEndsAtGreaterThan(
                         court.getId(), BookingStatus.CONFIRMED, slotEnd, slotStart)
                 .size();
-    }
-
-    private AppUser createUser(String email) {
-        var user = new AppUser();
-        user.setEmail(email);
-        user.setName(email);
-        user.setPassword("{noop}irrelevant-for-this-test");
-        user.setRole(AppUserRole.USER);
-        user.setEnabled(true);
-        return appUserRepository.save(user);
-    }
-
-    private void cleanUp() {
-        bookingRepository.deleteAll();
-        closureRepository.deleteAll();
-        openingHoursRepository.deleteAll();
-        courtRepository.deleteAll();
-        appUserRepository.deleteAll();
     }
 
     private enum Outcome {
