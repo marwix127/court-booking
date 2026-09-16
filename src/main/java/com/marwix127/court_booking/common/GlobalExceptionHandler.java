@@ -6,6 +6,7 @@ import java.util.TreeMap;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -34,6 +35,22 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ForbiddenException.class)
     public ProblemDetail handleForbidden(ForbiddenException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    /**
+     * Credenciales incorrectas en el login.
+     *
+     * Hace falta un handler porque esta excepcion la lanza el
+     * AuthenticationManager dentro del controlador, no la cadena de filtros:
+     * sin esto seria un 500 en lugar de un 401.
+     *
+     * El mensaje es deliberadamente vago: distinguir "no existe ese usuario"
+     * de "la contrasenya es incorrecta" permitiria averiguar que emails estan
+     * registrados.
+     */
+    @ExceptionHandler(AuthenticationException.class)
+    public ProblemDetail handleAuthentication(AuthenticationException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Invalid credentials");
     }
 
     /**

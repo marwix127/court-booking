@@ -3,8 +3,7 @@ package com.marwix127.court_booking.bookings;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -30,9 +29,9 @@ public class BookingController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public BookingResponse create(@Valid @RequestBody BookingRequest request,
-            @AuthenticationPrincipal UserDetails principal) {
+            Authentication authentication) {
 
-        return BookingResponse.from(bookingService.create(request, currentUser(principal)));
+        return BookingResponse.from(bookingService.create(request, currentUser(authentication)));
     }
 
     /**
@@ -41,19 +40,20 @@ public class BookingController {
      * puede pedir esta transicion concreta.
      */
     @PostMapping("/{id}/cancel")
-    public BookingResponse cancel(@PathVariable UUID id,
-            @AuthenticationPrincipal UserDetails principal) {
-
-        return BookingResponse.from(bookingService.cancel(id, currentUser(principal)));
+    public BookingResponse cancel(@PathVariable UUID id, Authentication authentication) {
+        return BookingResponse.from(bookingService.cancel(id, currentUser(authentication)));
     }
 
     /**
-     * El UserDetails que construye AppUserDetailsService no es la entidad,
-     * solo lleva email, hash y roles. Las operaciones necesitan el AppUser
-     * real por la clave foranea y por el rol, asi que se recupera por email.
+     * Recupera el AppUser real a partir de la identidad autenticada.
+     *
+     * Se usa Authentication.getName() y no @AuthenticationPrincipal porque el
+     * principal cambia segun el mecanismo: un UserDetails con auth basica, un
+     * Jwt con token. getName() devuelve el subject en los dos casos, asi que
+     * el controlador no depende de como se autentico el cliente.
      */
-    private AppUser currentUser(UserDetails principal) {
-        return appUserRepository.findByEmail(principal.getUsername())
-                .orElseThrow(() -> new UserNotFoundException(principal.getUsername()));
+    private AppUser currentUser(Authentication authentication) {
+        return appUserRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new UserNotFoundException(authentication.getName()));
     }
 }
