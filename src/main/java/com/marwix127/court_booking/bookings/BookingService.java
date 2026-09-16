@@ -8,9 +8,12 @@ import java.time.ZonedDateTime;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.marwix127.court_booking.closures.ClosureRepository;
 import com.marwix127.court_booking.common.ConstraintViolations;
@@ -23,16 +26,43 @@ import com.marwix127.court_booking.opening_hours.OpeningHoursRepository;
 import com.marwix127.court_booking.user.AppUser;
 import com.marwix127.court_booking.user.AppUserRole;
 
-import lombok.RequiredArgsConstructor;
-
 @Service
-@RequiredArgsConstructor
 public class BookingService {
+
+    /**
+     * Intentos ante un interbloqueo. Con 3 basta de sobra: cada reintento
+     * ocurre cuando la transaccion rival ya ha terminado, asi que el segundo
+     * intento obtiene una respuesta determinista.
+     */
+    private static final int MAX_ATTEMPTS = 3;
 
     private final BookingRepository bookingRepository;
     private final CourtRepository courtRepository;
     private final OpeningHoursRepository openingHoursRepository;
     private final ClosureRepository closureRepository;
+
+    /**
+     * Transacciones programaticas en lugar de @Transactional sobre create().
+     *
+     * El reintento tiene que abrir una transaccion NUEVA en cada vuelta: una
+     * transaccion abortada por interbloqueo no se puede seguir usando. Con
+     * @Transactional el metodo entero seria una sola transaccion y el bucle no
+     * serviria de nada.
+     */
+    private final TransactionTemplate transactionTemplate;
+
+    public BookingService(BookingRepository bookingRepository,
+            CourtRepository courtRepository,
+            OpeningHoursRepository openingHoursRepository,
+            ClosureRepository closureRepository,
+            PlatformTransactionManager transactionManager) {
+
+        this.bookingRepository = bookingRepository;
+        this.courtRepository = courtRepository;
+        this.openingHoursRepository = openingHoursRepository;
+        this.closureRepository = closureRepository;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
 
     /**
      * Zona horaria del club. Las reservas son instantes absolutos y los
@@ -43,8 +73,39 @@ public class BookingService {
     @Value("${app.club.timezone}")
     private String clubTimezone;
 
-    @Transactional
+    /**
+     * Crea una reserva, reintentando si Postgres aborta la transaccion por
+     * interbloqueo.
+     *
+     * Cuando varias peticiones insertan franjas solapadas a la vez, las
+     * transacciones se esperan mutuamente mientras se comprueba la restriccion
+     * EXCLUDE, y Postgres puede detectar un interbloqueo y matar a una de
+     * ellas. Eso llega como CannotAcquireLockException (SQLState 40P01), no
+     * como violacion de restriccion (23P01): la victima no sabe si habria
+     * podido reservar o no.
+     *
+     * Por eso se reintenta en lugar de devolver 409 directamente. En el
+     * reintento la rival ya ha terminado, asi que la respuesta es
+     * determinista: o la franja esta ocupada y salta un 23P01 limpio, o
+     * quedaba libre y la reserva se crea. Traducir el interbloqueo a 409 sin
+     * mas negaria reservas que si eran posibles.
+     */
     public Booking create(BookingRequest request, AppUser user) {
+        for (int attempt = 1;; attempt++) {
+            try {
+                return transactionTemplate.execute(status -> createInTransaction(request, user));
+            } catch (CannotAcquireLockException ex) {
+                if (attempt >= MAX_ATTEMPTS) {
+                    // Contencion sostenida. Es un conflicto real desde el
+                    // punto de vista del cliente: que reintente o elija otra
+                    // franja.
+                    throw new BookingOverlapException();
+                }
+            }
+        }
+    }
+
+    private Booking createInTransaction(BookingRequest request, AppUser user) {
         var court = courtRepository.findById(request.courtId())
                 .orElseThrow(() -> new CourtNotFoundException(request.courtId()));
 
