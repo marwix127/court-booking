@@ -1,5 +1,7 @@
 # Court Booking
 
+[![CI](https://github.com/marwix127/court-booking/actions/workflows/ci.yml/badge.svg)](https://github.com/marwix127/court-booking/actions/workflows/ci.yml)
+
 REST API for booking the courts of a sports club: padel, tennis and futsal.
 
 Built with Spring Boot and PostgreSQL. The point of this project wasn't to write another CRUD
