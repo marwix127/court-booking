@@ -31,6 +31,16 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Reglas de negocio incumplidas: la peticion es correcta en forma pero no
+     * se puede atender. 422 y no 400, que queda reservado para errores de
+     * sintaxis y de validacion de campos.
+     */
+    @ExceptionHandler(UnprocessableException.class)
+    public ProblemDetail handleUnprocessable(UnprocessableException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
+    }
+
+    /**
      * Fallos de Bean Validation (@Valid) sobre el cuerpo de la peticion.
      * Ademas del 400, devuelve un mapa campo -> motivo en la propiedad
      * "errors", para que el cliente sepa exactamente que corregir.
